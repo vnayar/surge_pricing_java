@@ -1,0 +1,13 @@
+package io.funnel_labs.surge_pricing;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+public class SurgePricingApplication {
+
+  public static void main(String[] args) {
+    SpringApplication.run(SurgePricingApplication.class, args);
+  }
+
+}
