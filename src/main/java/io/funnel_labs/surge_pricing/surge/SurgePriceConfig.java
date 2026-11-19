@@ -23,4 +23,9 @@ public class SurgePriceConfig {
   /// A maximum value for a raw surge price multiplier (before diffusion).
   @Builder.Default
   private double maxSurgePriceMultiplier = 5.0;
+
+  /// When diffusing surge price multipliers for H3 Cells, the weight that neighbor cells should
+  /// have in determining the diffused value.
+  @Builder.Default
+  private double weightNeighbor = 0.25;
 }

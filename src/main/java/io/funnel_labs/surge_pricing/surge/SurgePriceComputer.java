@@ -40,7 +40,11 @@ public class SurgePriceComputer {
     Map<Long, Double> rawSurgePriceMultiplierByH3Cell =
         computeRawSurgePriceMultiplierByH3Cell(driverCountByH3Cell, requestCountByH3Cell);
 
-    prevSurgePriceMultiplierByH3Cell = rawSurgePriceMultiplierByH3Cell;
+    // Smooth out the multipliers by blending their values with their neighbors.
+    Map<Long, Double> spatialSurgePriceMultiplierByH3Cell =
+        computeSpatialSurgePriceMultiplierByH3Cell(rawSurgePriceMultiplierByH3Cell);
+
+    prevSurgePriceMultiplierByH3Cell = spatialSurgePriceMultiplierByH3Cell;
   }
 
   /// Converts the ratio of drivers (supply) to requests (demand) to create a raw surge price
@@ -78,4 +82,39 @@ public class SurgePriceComputer {
     return rawSurgePriceMultiplierByH3Cell;
   }
 
+  // Smooths out the raw surge price multipliers by blending their values per cell with the values
+  // of their neighbor cells.
+  public Map<Long, Double> computeSpatialSurgePriceMultiplierByH3Cell(
+      Map<Long, Double> rawSurgePriceMultiplierByH3Cell) {
+    Set<Long> h3CellSet = rawSurgePriceMultiplierByH3Cell.keySet();
+    Map<Long, Double> spatialSurgePriceMultiplierByH3Cell = new HashMap<>(h3CellSet.size());
+    for (Long h3Cell : h3CellSet) {
+      // The cell itself uses 1 minus the spatial weight.
+      double rawSurgePriceMultiplier = rawSurgePriceMultiplierByH3Cell.get(h3Cell);
+      double selfSurgePriceMultiplier = rawSurgePriceMultiplier
+          * (1.0 - surgePriceConfig.getWeightNeighbor());
+      // Look at the target cell's neighbors.
+      double neighborSurgePriceMultiplierSum = 0.0;
+      double numNeighbors = 0.0;
+      for (Long diskCell : h3.gridDisk(h3Cell, 1)) {
+        // The neighbors collectively contribute according to the spatial weight.
+        if (!diskCell.equals(h3Cell) && h3CellSet.contains(diskCell)) {
+          neighborSurgePriceMultiplierSum += rawSurgePriceMultiplierByH3Cell.get(diskCell);
+          numNeighbors += 1.0;
+        }
+      }
+      spatialSurgePriceMultiplierByH3Cell.put(
+          h3Cell,
+          selfSurgePriceMultiplier + surgePriceConfig.getWeightNeighbor()
+              * neighborSurgePriceMultiplierSum / numNeighbors);
+
+      log.info("h3CellS[{}]={ \"rawSurgePriceMultiplier\": {}, "
+          + "\"neighborSurgePriceMultiplierSum\": {},"
+          + "\"numNeighbors\": {},"
+          + "\"spatialSurgePriceMultiplierByCell\": {} }",
+          h3Cell, rawSurgePriceMultiplier, neighborSurgePriceMultiplierSum,
+          numNeighbors, spatialSurgePriceMultiplierByH3Cell.get(h3Cell));
+    }
+    return spatialSurgePriceMultiplierByH3Cell;
+  }
 }

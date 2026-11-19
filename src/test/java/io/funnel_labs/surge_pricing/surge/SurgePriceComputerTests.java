@@ -60,6 +60,7 @@ public class SurgePriceComputerTests {
       .demandToSupplySensitivity(0.5)
       .demandToSupplyThreshold(2.0)
       .maxSurgePriceMultiplier(5.0)
+      .weightNeighbor(0.25)
       .build();
 
   // We cannot initialize it here, because H3Core.newInstance() can throw.
@@ -105,4 +106,55 @@ public class SurgePriceComputerTests {
 
     assertThat(surgePriceMultipliersByH3Cell).containsEntry(h3.stringToH3("881f1d48a9fffff"), 1.0);
   }
+
+  @Test
+  public void spatialDiffusionOfHighDemandRatio() {
+    // The supply
+    when(driverStatusAggregator.getDriverCountByH3Cell())
+        .thenReturn(Map.of(
+                // Middle of Tiergarten
+                h3.stringToH3("881f1d48a9fffff"), 2L,
+                // Neighboring cells
+                h3.stringToH3("881f1d48e7fffff"), 0L,
+                h3.stringToH3("881f1d48adfffff"), 0L,
+                h3.stringToH3("881f1d48a1fffff"), 0L,
+                h3.stringToH3("881f1d48abfffff"), 0L,
+                h3.stringToH3("881f1d4885fffff"), 0L,
+                h3.stringToH3("881f1d48e3fffff"), 0L));
+    // The demand
+    when(customerRequestAggregator.getRequestCountByH3Cell())
+        .thenReturn(Map.of(
+                // Middle of Tiergarten
+                h3.stringToH3("881f1d48a9fffff"), 10L,
+                // Neighboring cells
+                h3.stringToH3("881f1d48e7fffff"), 0L,
+                h3.stringToH3("881f1d48adfffff"), 0L,
+                h3.stringToH3("881f1d48a1fffff"), 0L,
+                h3.stringToH3("881f1d48abfffff"), 0L,
+                h3.stringToH3("881f1d4885fffff"), 0L,
+                h3.stringToH3("881f1d48e3fffff"), 0L));
+
+    surgePriceComputer.computeSurgePriceMultipliers();
+    Map<Long, Double> surgePriceMultipliersByH3Cell =
+        surgePriceComputer.getSurgePriceMultiplierByH3Cell();
+
+    // The main cell with supply & demand should diffuse a bit into its neighbors.
+    // Raw = demand/(supply+epsilon) = 4.7619
+    // Log = 1.0 + 0.5 * log(1.0 + max(0, Raw - 2.0)) = 1.6625
+    // Spatial = (1.0 - 0.25) * Log + 0.25 * (1.0 + 1.0 + 1.0 + 1.0 + 1.0 + 1.0)/6 = 1.4969
+    assertThat(surgePriceMultipliersByH3Cell)
+        .hasEntrySatisfying(
+            h3.stringToH3("881f1d48a9fffff"),
+            multiplier -> assertThat(multiplier).isCloseTo(1.4969, within(0.001)));
+
+    // Neighbor cells should absorb some of the value of the cell with supply and demand.
+    // Raw = 0 / (0 + 0.1) = 0.0
+    // Log = 1.0 + 0.5 * log(1.0 + max(0, Raw - 2.0)) = 1.0
+    // Spatial = (1.0 - 0.25) * Log + 0.25 * (1.0 + 1.0 + 1.6625)/3 = 1.0552
+    assertThat(surgePriceMultipliersByH3Cell)
+        .hasEntrySatisfying(
+            h3.stringToH3("881f1d48e7fffff"),
+            multiplier -> assertThat(multiplier).isCloseTo(1.0552, within(0.001)));
+  }
+
 }
