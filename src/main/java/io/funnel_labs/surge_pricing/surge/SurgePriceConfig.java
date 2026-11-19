@@ -28,4 +28,8 @@ public class SurgePriceConfig {
   /// have in determining the diffused value.
   @Builder.Default
   private double weightNeighbor = 0.25;
+
+  /// The weight used for previous values when computing Exponential Moving Averages.
+  @Builder.Default
+  private double temporalSmoothingFactor = 0.35;
 }

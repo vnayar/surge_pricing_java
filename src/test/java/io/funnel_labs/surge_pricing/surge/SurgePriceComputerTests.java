@@ -61,6 +61,7 @@ public class SurgePriceComputerTests {
       .demandToSupplyThreshold(2.0)
       .maxSurgePriceMultiplier(5.0)
       .weightNeighbor(0.25)
+      .temporalSmoothingFactor(0.5)
       .build();
 
   // We cannot initialize it here, because H3Core.newInstance() can throw.
@@ -155,6 +156,67 @@ public class SurgePriceComputerTests {
         .hasEntrySatisfying(
             h3.stringToH3("881f1d48e7fffff"),
             multiplier -> assertThat(multiplier).isCloseTo(1.0552, within(0.001)));
+  }
+
+  @Test
+  public void temporalDiffusionOfHighDemandRatio() {
+    // The supply
+    when(driverStatusAggregator.getDriverCountByH3Cell())
+        .thenReturn(Map.of(
+                // Middle of Tiergarten
+                h3.stringToH3("881f1d48a9fffff"), 2L,
+                // Neighboring cells
+                h3.stringToH3("881f1d48e7fffff"), 0L,
+                h3.stringToH3("881f1d48adfffff"), 0L,
+                h3.stringToH3("881f1d48a1fffff"), 0L,
+                h3.stringToH3("881f1d48abfffff"), 0L,
+                h3.stringToH3("881f1d4885fffff"), 0L,
+                h3.stringToH3("881f1d48e3fffff"), 0L));
+    // The demand
+    when(customerRequestAggregator.getRequestCountByH3Cell())
+        .thenReturn(Map.of(
+                // Middle of Tiergarten
+                h3.stringToH3("881f1d48a9fffff"), 10L,
+                // Neighboring cells
+                h3.stringToH3("881f1d48e7fffff"), 0L,
+                h3.stringToH3("881f1d48adfffff"), 0L,
+                h3.stringToH3("881f1d48a1fffff"), 0L,
+                h3.stringToH3("881f1d48abfffff"), 0L,
+                h3.stringToH3("881f1d4885fffff"), 0L,
+                h3.stringToH3("881f1d48e3fffff"), 0L))
+        // Demand drops off
+        .thenReturn(Map.of(
+                // Middle of Tiergarten
+                h3.stringToH3("881f1d48a9fffff"), 2L,
+                // Neighboring cells
+                h3.stringToH3("881f1d48e7fffff"), 0L,
+                h3.stringToH3("881f1d48adfffff"), 0L,
+                h3.stringToH3("881f1d48a1fffff"), 0L,
+                h3.stringToH3("881f1d48abfffff"), 0L,
+                h3.stringToH3("881f1d4885fffff"), 0L,
+                h3.stringToH3("881f1d48e3fffff"), 0L));
+
+    surgePriceComputer.computeSurgePriceMultipliers();
+    Map<Long, Double> surgePriceMultipliersByH3Cell =
+        surgePriceComputer.getSurgePriceMultiplierByH3Cell();
+
+    // The expected value is the same as the normal spatially diffused value the first time.
+    assertThat(surgePriceMultipliersByH3Cell)
+        .hasEntrySatisfying(
+            h3.stringToH3("881f1d48a9fffff"),
+            multiplier -> assertThat(multiplier).isCloseTo(1.4969, within(0.001)));
+
+    // Compute the next round of surge multipliers using new supply & demand values.
+    surgePriceComputer.computeSurgePriceMultipliers();
+    surgePriceMultipliersByH3Cell =
+        surgePriceComputer.getSurgePriceMultiplierByH3Cell();
+
+    // We expect the value to diffuse by 50% over time with its previous value in addition to spatial diffusion.
+    // < 0.5 * 1.6625 + 0.5 * 1.0 < 1.3313
+    assertThat(surgePriceMultipliersByH3Cell)
+        .hasEntrySatisfying(
+            h3.stringToH3("881f1d48a9fffff"),
+            multiplier -> assertThat(multiplier).isLessThan(1.3313));
   }
 
 }

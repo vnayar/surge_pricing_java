@@ -44,7 +44,11 @@ public class SurgePriceComputer {
     Map<Long, Double> spatialSurgePriceMultiplierByH3Cell =
         computeSpatialSurgePriceMultiplierByH3Cell(rawSurgePriceMultiplierByH3Cell);
 
-    prevSurgePriceMultiplierByH3Cell = spatialSurgePriceMultiplierByH3Cell;
+    // Update an Exponential Moving Average (EMA) to reduce jitter in time.
+    Map<Long, Double> finalSurgePriceMultiplierByH3Cell =
+        computeEmaSurgePriceMultiplierByH3Cell(spatialSurgePriceMultiplierByH3Cell);
+
+    prevSurgePriceMultiplierByH3Cell = finalSurgePriceMultiplierByH3Cell;
   }
 
   /// Converts the ratio of drivers (supply) to requests (demand) to create a raw surge price
@@ -116,5 +120,27 @@ public class SurgePriceComputer {
           numNeighbors, spatialSurgePriceMultiplierByH3Cell.get(h3Cell));
     }
     return spatialSurgePriceMultiplierByH3Cell;
+  }
+
+  /// Computes the Exponential Moving Average (EMA) for the surge price multipliers by
+  /// using a weighted average of previous values and the current values.
+  ///
+  /// @param currSurgePriceMultiplierByH3Cell  This parameter is modified in-place.
+  public Map<Long, Double> computeEmaSurgePriceMultiplierByH3Cell(
+      Map<Long, Double> currSurgePriceMultiplierByH3Cell) {
+    if (prevSurgePriceMultiplierByH3Cell != null) {
+      for (Long h3Cell : currSurgePriceMultiplierByH3Cell.keySet()) {
+        currSurgePriceMultiplierByH3Cell.compute(h3Cell, (cell, currMultiplier) -> {
+              if (prevSurgePriceMultiplierByH3Cell.containsKey(cell)) {
+                double lambda = surgePriceConfig.getTemporalSmoothingFactor();
+                return currMultiplier * (1 - lambda) + prevSurgePriceMultiplierByH3Cell.get(h3Cell) * lambda;
+              } else {
+                return currMultiplier;
+              }
+            });
+        log.info("finalSugePriceMultiplier[{}]={}", h3Cell, currSurgePriceMultiplierByH3Cell.get(h3Cell));
+      }
+    }
+    return currSurgePriceMultiplierByH3Cell;
   }
 }
