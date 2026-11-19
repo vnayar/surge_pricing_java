@@ -1,0 +1,744 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+<!-- 2026-11-19 Thu 17:08 -->
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ride-Hailing Surge Pricing Service</title>
+<meta name="author" content="Vijay Paul Nayar" />
+<meta name="generator" content="Org Mode" />
+<link rel="stylesheet" type="text/css" href="https://fniessen.github.io/org-html-themes/src/readtheorg/css/htmlize.css"/>
+<link rel="stylesheet" type="text/css" href="https://fniessen.github.io/org-html-themes/src/readtheorg/css/readtheorg.css"/>
+<link rel="stylesheet" type="text/css" href="https://fniessen.github.io/org-html-themes/src/readtheorg/css/code-copy.css"/>
+<link rel="stylesheet" type="text/css" href="https://fniessen.github.io/org-html-themes/src/readtheorg/css/search.css"/>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.4/js/bootstrap.min.js"></script>
+<script type="text/javascript" src="https://fniessen.github.io/org-html-themes/src/vendor/stickytableheaders/jquery.stickytableheaders.min.js"></script>
+<script type="text/javascript" src="https://fniessen.github.io/org-html-themes/src/readtheorg/js/search.js"></script>
+<script type="text/javascript" src="https://fniessen.github.io/org-html-themes/src/readtheorg/js/readtheorg.js"></script>
+<script type="text/javascript" src="https://fniessen.github.io/org-html-themes/src/readtheorg/js/code-copy.js"></script>
+<style> #content{max-width:100%;}</style>
+<style> p{max-width:90%;}</style>
+<style> li{max-width:90%;}</style>
+<style> #table-of-contents {max-width:15%;}</style>
+<style> #postamble {max-width:15%;}</style>
+<script>
+  window.MathJax = {
+    tex: {
+      ams: {
+        multlineWidth: '85%'
+      },
+      tags: 'ams',
+      tagSide: 'right',
+      tagIndent: '.8em'
+    },
+    chtml: {
+      scale: 1.0,
+      displayAlign: 'center',
+      displayIndent: '0em'
+    },
+    svg: {
+      scale: 1.0,
+      displayAlign: 'center',
+      displayIndent: '0em'
+    },
+    output: {
+      font: 'mathjax-modern',
+      displayOverflow: 'overflow'
+    }
+  };
+</script>
+
+<script
+  id="MathJax-script"
+  async
+  src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+</script>
+</head>
+<body>
+<div id="content" class="content">
+<h1 class="title">Ride-Hailing Surge Pricing Service
+<br />
+<span class="subtitle">version 0.1.0, last updated <span class="timestamp-wrapper"><span class="timestamp">&lt;2026-11-19 Thu&gt;</span></span></span>
+</h1>
+<div id="table-of-contents" role="doc-toc">
+<h2>Table of Contents</h2>
+<div id="text-table-of-contents" role="doc-toc">
+<ul>
+<li><a href="#title">1. Ride-Hailing Surge Pricing Service</a></li>
+<li><a href="#abstract">2. Abstract</a></li>
+<li><a href="#background">3. Background</a>
+<ul>
+<li><a href="#system-summary">3.1. System Summary</a></li>
+<li><a href="#current-components">3.2. Current Components</a></li>
+<li><a href="#the-problem-of-demand-supply-mismatch">3.3. The Problem of Demand/Supply Mismatch</a></li>
+<li><a href="#influencing-demand-and-supply">3.4. Influencing Demand and Supply</a></li>
+<li><a href="#stability-of-surge-pricing">3.5. Stability of Surge Pricing</a></li>
+<li><a href="#new-surge-pricing-service">3.6. New Surge Pricing Service</a></li>
+</ul>
+</li>
+<li><a href="#requirements">4. Requirements</a></li>
+<li><a href="#method">5. Method</a>
+<ul>
+<li><a href="#component-overview">5.1. Component Overview</a></li>
+<li><a href="#kafka-topic-driverstatusupdateevents">5.2. Kafka Topic: DriverStatusUpdateEvents</a></li>
+<li><a href="#kafka-topic-customerrequestevents">5.3. Kafka Topic: CustomerRequestEvents</a></li>
+<li><a href="#component-surgepriceservice">5.4. Component: SurgePriceService</a>
+<ul>
+<li><a href="#algorithm-surge-price-multiplier">5.4.1. Algorithm: Surge-Price Multiplier</a></li>
+<li><a href="#sub-component-driverstatusaggregator">5.4.2. Sub-Component: DriverStatusAggregator</a></li>
+<li><a href="#sub-component-customerrequestaggregator">5.4.3. Sub-Component: CustomerRequestAggregator</a></li>
+<li><a href="#sub-component-surgepricecomputer">5.4.4. Sub-Component: SurgePriceComputer</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+<div id="outline-container-title" class="outline-2">
+<h2 id="title"><span class="section-number-2">1.</span> Ride-Hailing Surge Pricing Service</h2>
+<div class="outline-text-2" id="text-title">
+</div>
+</div>
+<div id="outline-container-abstract" class="outline-2">
+<h2 id="abstract"><span class="section-number-2">2.</span> Abstract</h2>
+<div class="outline-text-2" id="text-abstract">
+<p>
+Customers are interested in finding taxis to transport them to destinations, while taxi drivers are
+trying to maximize their earned revenue. Both customers and taxi drivers have no innate knowledge of
+the needs of the other, and demand can sometimes be higher than the supply of available taxis,
+meaning that some customers should find an alternative route rather than waiting for a taxi. Surge
+Pricing is a mechanism to adjust prices according to the ratio of active customer requests to
+available taxi drivers by geographic area. Higher prices serve as both a means to attract more taxi
+drivers to an area with insufficient supply and a means to encourage users to find alternatives to
+reduce demand.
+</p>
+</div>
+</div>
+<div id="outline-container-background" class="outline-2">
+<h2 id="background"><span class="section-number-2">3.</span> Background</h2>
+<div class="outline-text-2" id="text-background">
+<p>
+This document is a software design document that impacts a hypothetical software system for a
+ride-hailing app. The document will serve both its normal purpose as context for human engineers, but
+also as context for AI systems that can be used to assess how well pull-requests move the current
+implementation towards being in compliance with the design.
+</p>
+</div>
+<div id="outline-container-system-summary" class="outline-3">
+<h3 id="system-summary"><span class="section-number-3">3.1.</span> System Summary</h3>
+<div class="outline-text-3" id="text-system-summary">
+<p>
+The company operates a ride-hailing system which brings together two broad classes of users:
+</p>
+<ul class="org-ul">
+<li><b>Customers</b>: These users are willing to pay money in return for transportation
+services. Everything else in the system revolves around trying to satisfy the needs of the
+customers as well as possible with the available resources.</li>
+<li><b>Drivers</b>: These are independent or taxi businesses that transport customers in return for
+payment. Their goal is to maximize their access to customers in order to maximize their own
+profits.</li>
+</ul>
+
+<p>
+The ride-hailing system allows customers to use a Customer Mobile App in order to schedule
+transportation to their desired location. The benefits to the customer are as follows:
+</p>
+<ol class="org-ol">
+<li><b>Transparency</b>: The customer is able to see the total price of the transportation up-front,
+allowing them to decide whether they wish for the service before they commit.</li>
+<li><b>Ease of Use</b>: Rather than physiclly having to waive a taxi down, the Customer App is connected
+to a system that can bring a driver exactly to a customer's location, even if there are no
+drivers in the immediate vicinity.</li>
+<li><b>Competitive Pricing</b>: Because multiple independent and taxi businesses agree in advance to take
+customers for a standardized price, the customers effectively benefit from collective
+bargaining. Because drivers get a higher volume and steady stream of customers, the price per
+customer does not need to be as high.</li>
+</ol>
+
+<p>
+The ride-hailing service also benefits drivers when they use the Driver Mobile App. Their benefits
+include:
+</p>
+<ol class="org-ol">
+<li><b>Higher Profits</b>: The system can make transportation offers for customers without the driver even
+being at the customer's location (e.g. the customer is still in their home/office, the nearest
+customer is out of sight, or the driver is currently completing another ride). The higher number
+of bookings per day and less time spent searching or waiting for customers translates into higher
+profits.</li>
+</ol>
+</div>
+</div>
+<div id="outline-container-current-components" class="outline-3">
+<h3 id="current-components"><span class="section-number-3">3.2.</span> Current Components</h3>
+<div class="outline-text-3" id="text-current-components">
+<p>
+In lieu of a system architecture document, the shape of the system is summarized here.
+</p>
+
+<p>
+Normally, the system is composed of the following parts:
+</p>
+<ul class="org-ul">
+<li><b>Driver App</b>: This is an application for mobile devices owned by taxi drivers. It is responsible
+for allowing drivers to register with the mobility service and announce that they are available to
+accept offers. If DriverApp will also present drivers with offers, which they can choose to
+accept.</li>
+<li><b>Customer App</b>: This is an application for mobile devices owned by the customers. Customers that
+desire transportation from a location to another location can initiate a request, be presented
+with a price, and if the customer accepts, they will be quickly notified if a taxi driver has
+accepted their request.</li>
+<li><b>Api Gateway</b>: This component handles common <a href="https://en.wikipedia.org/wiki/Reverse_proxy">reverse-proxy</a> concerns, such as load-balancing ingress
+requests, TLS termination, rate limiting, etc. It is typically implemented as part of software
+infrastructure using technologies like <a href="https://kubernetes.io/docs/concepts/services-networking/gateway/">Kubernetes Gateway API</a>, <a href="https://www.envoyproxy.io/">Envoy</a>, <a href="https://traefik.io/traefik">Traefik</a>, or even a basic
+<a href="https://nginx.org/">nginx</a> server.</li>
+<li><b>Driver Gateway</b>: The primary purpose of this service is to accept synchronous API calls from
+drivers that update their status as well as location, and convert them into asynchronous Kafka
+messages for downstream processing.</li>
+<li><b>Customer Gateway</b>: The primary purpose of this service is to accept synchronous API calls from
+customers requesting taxi services, including the pickup and dropoff locations, and convert them
+into asynchronous Kafka messages for downstream processing.</li>
+<li><b>Offer Service</b>: This service has several key responsibilities including: presenting customer
+offers with a price for taxi services, prioritizing taxis to fulfill customer reqeusts, contacting
+the DriverApp of taxi drivers until one accepts the offer, and then notifying the customer that
+their request has been assigned.</li>
+</ul>
+
+
+<div id="orge58beba" class="figure">
+<p><img src="design/current-component-overview.svg" alt="current-component-overview.svg" class="org-svg" />
+</p>
+</div>
+</div>
+</div>
+<div id="outline-container-the-problem-of-demand-supply-mismatch" class="outline-3">
+<h3 id="the-problem-of-demand-supply-mismatch"><span class="section-number-3">3.3.</span> The Problem of Demand/Supply Mismatch</h3>
+<div class="outline-text-3" id="text-the-problem-of-demand-supply-mismatch">
+<p>
+The system currently focuses on satisfying customer requests (demand) by providing offers to
+independent or taxi drivers (supply). So long as the level of demand is at or below the level of
+supply, this operates smoothly without any problems.
+</p>
+
+<p>
+However, when demand exceeds supply in a given geographic vicinity, then customers end up waiting
+considerably longer until a driver becomes available. Longer wait times lead to more cancellations,
+which creates further chaos. There may be available drivers in nearby or more distant geographic
+areas, but for these drivers, getting to the customer's location takes time and lost business
+opportunities if a customer makes a request closer to their location. This problem is especially
+exacerbated when a surge in demand happens in a single geographic area, for example, due to a
+sporting event, a convention, political event, or celebration.
+</p>
+
+<p>
+When customers try to use the app, but cannot secure transportation, it undermines their confidence
+in the system overall. Likewise, if drivers feel that they cannot earn enough profit to justify
+their expenses, especially if they only see offers quite far from their current location, then this
+undermines the their confidence in the system as well.
+</p>
+</div>
+</div>
+<div id="outline-container-influencing-demand-and-supply" class="outline-3">
+<h3 id="influencing-demand-and-supply"><span class="section-number-3">3.4.</span> Influencing Demand and Supply</h3>
+<div class="outline-text-3" id="text-influencing-demand-and-supply">
+<p>
+In order to address the problem of a mismatch between supply and demand, the system architecture has
+been modified so that dynamic or surge pricing may be used as an incentive to both customers and
+drivers to address the mismatch in demand vs. supply.
+</p>
+
+<p>
+When the ratio between demand and supply in a geographic area grows large, increasing the price for
+rides beginning within that area has the following effects:
+</p>
+<ul class="org-ul">
+<li>Some <b>customers</b> may be dissuaded by the increased price and seek out alternate forms of
+transportation, thereby decreasing demand.</li>
+<li>Some <b>drivers</b> may be incentivized by the higher prices of offers to travel from further away to
+the high-demand area.</li>
+</ul>
+
+<p>
+As more drivers move to the high demand area, the demand to supply ratio will decrease, and the
+surge pricing will accordingly do the same. Thus, using prices as incentives can lead to customers
+that get more timely service as well drivers that get compensated for the extra travel they must do
+to go to a different area.
+</p>
+</div>
+</div>
+<div id="outline-container-stability-of-surge-pricing" class="outline-3">
+<h3 id="stability-of-surge-pricing"><span class="section-number-3">3.5.</span> Stability of Surge Pricing</h3>
+<div class="outline-text-3" id="text-stability-of-surge-pricing">
+<p>
+Dynamic pricing is a sensitive topic, where there can be perceptions of unfairness if it is done
+incorrectly. Furthermore, because the prices are meant to influence driver and customer behavior,
+the prices must be reasonably predictable and stable to all users. For example, a customer that sees
+wildly fluctuating surge prices will not change their behavior or find an alternate means of
+transportation, but will simply keep making and cancelling requests until they get lucky and find a
+lower price. Likewise, a driver that sees wildly fluctuating surge prices may assume that, by the
+time they reach the area with high surge prices, they surge pricing will be gone, and they will not
+receive compensation for diverting from their normal area.
+</p>
+
+<p>
+Thus in order for surge pricing to achieve its intended effect, it must have a degree of stability
+over:
+</p>
+<ul class="org-ul">
+<li><b>Time</b>: Over the duration of a request and an offer, the surge multiplier should be reasonably stable.</li>
+<li><b>Space</b>: In an area with a high demand to supply ratio, the wrong incentives are created if users
+simply cross the street in order to pursue a lower surge price. Thus, surge prices should be relatively
+stable over areas that are in need of a greater supply of drivers.</li>
+<li><b>Demand or Supply Fluctuations</b>: The ratio of demand to supply can fluctuate rapidly, especially
+when supply is low. Thus a ratio of 2 to 1 might change to 10 to 1, but this should not result in
+a 5x increase in price, but rather a more gradual change.</li>
+</ul>
+</div>
+</div>
+<div id="outline-container-new-surge-pricing-service" class="outline-3">
+<h3 id="new-surge-pricing-service"><span class="section-number-3">3.6.</span> New Surge Pricing Service</h3>
+<div class="outline-text-3" id="text-new-surge-pricing-service">
+<p>
+Rather than adding all the additional complexity of computing surge prices, updating them, and
+updating prices directly into the <b>Offer Service</b>, the system architecture has been modified so that
+these responsibilities are to be performed by a new <b>Surge Pricing Service</b>.
+</p>
+
+<p>
+At a high level, this new service is expected to have the following interactions with other services:
+</p>
+<ul class="org-ul">
+<li><b>Offer Service</b>: The Offer Service will periodically query the Surge Pricing Service in order to
+determine the surge price multiplier for a customer ride request, which will not only be used to
+compute a price, but it will also be shown directly to customers (so they are aware that a this is
+a temporary price change, not a permanent one).</li>
+<li><b>Driver App</b>: It should be possible for the drivers to see on a map the surge price
+multipliers. This allows them to make an informed choice about whether they wish to relocate or
+not while providing services.</li>
+</ul>
+
+<p>
+Creating this as a separate service has several advantages:
+</p>
+<ol class="org-ol">
+<li>It allows the more complex formulas and configurations to be independently and modularly tested,
+separate from the already complex logic of the Offer Service.</li>
+<li>It allows deployment on separate hardware, which is useful because the performance and scaling
+needs may be different from the Offer Service.</li>
+<li>Keeping the complex logic strictly separate makes live incidents easier to diagnose.</li>
+</ol>
+</div>
+</div>
+</div>
+<div id="outline-container-requirements" class="outline-2">
+<h2 id="requirements"><span class="section-number-2">4.</span> Requirements</h2>
+<div class="outline-text-2" id="text-requirements">
+<ol class="org-ol">
+<li>The Surge Pricing Service <b>MUST</b> define a REST API interface usable by the <b>Driver App</b> capable
+of showing surge-price multipliers over a geographic area encompassing a circle with
+radius up to 8 kilometers with a resolution between 0.5 and 1.0 square-kilometers.</li>
+<li>If a geo-spatial system is used to describe geograhic areas, client libraries <b>MUST</b> exist for
+the following programming languages: C, Java, JavaScript, and Python.</li>
+<li>Surge-price multipliers <b>MUST</b> have a value between a 1.0 and 5.0.</li>
+<li>Surge-price multipliers <b>MUST</b> be updated at least every 60 seconds.</li>
+<li>Surge-price multipliers <b>SHOULD</b> gradually change (avoid jitter) despite potentially rapid
+fluctuations of incoming requests and available drivers in time and location.</li>
+</ol>
+</div>
+</div>
+<div id="outline-container-method" class="outline-2">
+<h2 id="method"><span class="section-number-2">5.</span> Method</h2>
+<div class="outline-text-2" id="text-method">
+<p>
+Information here is presented first at a high-level, with further details coming further below. That
+is, it is presented mostly in the reverse order from which it was written.
+</p>
+</div>
+<div id="outline-container-component-overview" class="outline-3">
+<h3 id="component-overview"><span class="section-number-3">5.1.</span> Component Overview</h3>
+<div class="outline-text-3" id="text-component-overview">
+<p>
+This design document describes the introduction of a Surge Pricing Service which is to be added to an
+existing system.
+</p>
+
+<p>
+The <b>Surge Pricing Service</b> will be responsible for consuming <code>DriverStatusUpdateEvents</code> and
+<code>CustomerRequestEvents</code>, computing surge-price multipliers over time and location, and offering an API
+to get the surge price multiplier for a given location.
+</p>
+
+
+<div id="orgb9e545a" class="figure">
+<p><img src="design/component-overview.svg" alt="component-overview.svg" class="org-svg" />
+</p>
+</div>
+</div>
+</div>
+<div id="outline-container-kafka-topic-driverstatusupdateevents" class="outline-3">
+<h3 id="kafka-topic-driverstatusupdateevents"><span class="section-number-3">5.2.</span> Kafka Topic: DriverStatusUpdateEvents</h3>
+<div class="outline-text-3" id="text-kafka-topic-driverstatusupdateevents">
+<p>
+This Kafka topic is owned by its producer, DriverGateway, and will have the following message types:
+</p>
+
+<ul class="org-ul">
+<li><b>Message Type</b>: DriverStatusUpdateEvent
+<ul class="org-ul">
+<li><b>Format</b>: Protobuf</li>
+<li><b>Fields</b>:
+<ul class="org-ul">
+<li><b>driverId</b> : long = The unique identifier for the DriverApp, uniquely linked to a driver.</li>
+<li><b>timestampInMs</b> : long = The current timestamp in millisecond resolution.</li>
+<li><b>location</b> : Location = Coordinates and other information used to assess a driver's position,
+heavily influenced by the <a href="https://developer.android.com/reference/android/location/Location">Android Location API</a>.
+<ul class="org-ul">
+<li><b>latitude</b> : float = The latitude of the coordinate in [-90.0, +90.0].</li>
+<li><b>longitude</b> : float = The longitude of the coordinate in [-180.0, +180.0].</li>
+<li><b>accuracy</b> : float = The estimated horizontal accuracy of the location in meters, assuming
+that noise is a normal distribution. The accuracy should be 1 standard deviation (68th
+percentile confidence interval).</li>
+<li><b>speed</b> : float = The rate of movement in meters per second.</li>
+<li><b>bearing</b> : float = The direction, in degrees east of true north, in which the device is moving.</li>
+</ul></li>
+<li><b>isAvailable</b> : bool = Indicates whether the driver is currently considering offers.</li>
+</ul></li>
+</ul></li>
+</ul>
+</div>
+</div>
+<div id="outline-container-kafka-topic-customerrequestevents" class="outline-3">
+<h3 id="kafka-topic-customerrequestevents"><span class="section-number-3">5.3.</span> Kafka Topic: CustomerRequestEvents</h3>
+<div class="outline-text-3" id="text-kafka-topic-customerrequestevents">
+<p>
+This Kafka topic is owned by its producer, ConsumerGateway, and will have the following message types:
+</p>
+
+<ul class="org-ul">
+<li><b>Message Type</b>: CustomerRequest
+<ul class="org-ul">
+<li><b>Format</b>: Protobuf</li>
+<li><b>Fields</b>:
+<ul class="org-ul">
+<li><b>customerId</b> : long</li>
+<li><b>location</b> : Location = Coordinates and other information used to assess a customer's
+location. Customers are generally not moving, thus, less information is needed to accurately
+determine their location.
+<ul class="org-ul">
+<li><b>latitude</b> : float = The latitude of the coordinate in [-90.0, +90.0].</li>
+<li><b>longitude</b> : float = The longitude of the coordinate in [-180.0, +180.0].</li>
+<li><b>accuracy</b> : float = The estimated horizontal accuracy of the location in meters, assuming
+that noise is a normal distribution. The accuracy should be 1 standard deviation (68th
+percentile confidence interval).</li>
+</ul></li>
+</ul></li>
+</ul></li>
+</ul>
+</div>
+</div>
+<div id="outline-container-component-surgepriceservice" class="outline-3">
+<h3 id="component-surgepriceservice"><span class="section-number-3">5.4.</span> Component: SurgePriceService</h3>
+<div class="outline-text-3" id="text-component-surgepriceservice">
+<p>
+This is a new software component introduced to the system architecture which is responsible for
+capturing the relevant data and performing the necessary computations to make a Surge-Price
+Multiplier for a given location.
+</p>
+</div>
+<div id="outline-container-algorithm-surge-price-multiplier" class="outline-4">
+<h4 id="algorithm-surge-price-multiplier"><span class="section-number-4">5.4.1.</span> Algorithm: Surge-Price Multiplier</h4>
+<div class="outline-text-4" id="text-algorithm-surge-price-multiplier">
+<p>
+One of the biggest challenges with the surge pricing is actually avoiding jitter and other
+incongruities associated with both time and space. Creating that balance between consistency and
+adjusting to changing facts on the ground requires several techniques working together in concert.
+</p>
+</div>
+<ol class="org-ol">
+<li><a id="orgb28ae3c"></a>1. Spatial and Temporal Bucketing<br />
+<div class="outline-text-5" id="text-5-4-1-1">
+<p>
+In order to satisfy requirements 3 and 4, to avoid jitter over both space and time, two mechanisms
+will be used to aggregate data before computing surge multiplies.
+</p>
+
+<ol class="org-ol">
+<li><b>Spatial Indexing</b>: Surge prices, rather than being computed for every single location, will be
+grouped into geo-spatial cells.</li>
+<li><b>Time Windows</b>: Relevant metrics and data will be computed for a rolling 5-minute sliding window,
+updated every 30 seconds.</li>
+</ol>
+
+<p>
+The geo-spatial system will be <a href="https://h3geo.org/">Uber H3</a> will be used (as opposed to <a href="https://s2geometry.io/">Google S2 Geometry</a>) because it
+uses hexagonal cells. Using hexagonal cells rather than square cells avoids the problem of possibly
+having jitter over location when one is near a corner in a square grid, close to 4 different
+geo-spacial cells.
+</p>
+
+<p>
+The H3 cell resolution to use will be level 8, because it has an average area of 0.737 km², which is
+a reasonable balance between jitter and specificity.
+</p>
+</div>
+</li>
+<li><a id="org9628b09"></a>2. Core Surge-Price Multiplier Formula<br />
+<div class="outline-text-5" id="text-5-4-1-2">
+<p>
+The raw (before further constraints are applied) surge price multiplier \(S_{raw}\) for a given H3
+cell \(c\) at time \(t\) is driven by the Demand-to-Supply Ratio \(R\).
+</p>
+
+<p>
+\[ R(c,t) = \frac{ D(c,t) }{ S(c,t) + \epsilon } \]
+</p>
+
+<ul class="org-ul">
+<li>\(D(c,t)\): Active ride requests/searches in cell \(c\) over the last 5 minutes.</li>
+<li>\(S(c,t)\): Available (unmatched) drivers in cell \(c\) over the last 5 minutes.</li>
+<li>\(\epsilon\): A small constant (0.1) to prevent division by 0 when supply is 0.</li>
+</ul>
+
+<p>
+A threshold can be applied so that no surge pricing is applied unless this threshold is exceeded.
+For example, if \(R(c,t) < R_{threshold}\), then a fixed value is used (\(S_{raw} = 1.0\)).
+</p>
+
+<p>
+To prevent extreme spikes in this surge price multiplier beyond the threshold \(R_{threshold}\), which
+can happen when the supply of available taxi drivers is low, a logarithmic scaling can be applied.
+</p>
+
+<p>
+\[ S_{raw}(c,t) = 1.0 + \alpha \cdot \ln (1.0 + max(0, R(c,t) - R_{threshold}) ) \]
+</p>
+
+<ul class="org-ul">
+<li>\(\alpha\): Sensitivity scaling factor (e.g., 0.5).</li>
+<li>\(R_{threshold}\): The minimum value for the Demand-to-Supply Ratio (\(R\)) before Surge-Pricing
+begins.</li>
+</ul>
+
+<p>
+The final result will be capped at an upper limit \(S_{max} = 5.0\).
+</p>
+</div>
+</li>
+<li><a id="org4e37ffe"></a>3. Spatial Smoothing (Neighbor Diffusion)<br />
+<div class="outline-text-5" id="text-5-4-1-3">
+<p>
+To prevent jitter over location near the boundary of geo-spacial cells, such as crossing a
+single street causing a doubling of price, a surge price multiplier can be computed that computes
+a percent of its value from the value of its neighbors.
+</p>
+
+<p>
+\[ S_{spatial}(c,t) = (1 - w_{neighbor}) \cdot S_{raw}(c,t) + w_{neighbor} \cdot \frac{1}{6} \sum_{n \in N(c)}{S_{raw}(n,t)} \]
+</p>
+<ul class="org-ul">
+<li>\(w_{neighbor}\): The weight/fraction that neighbors should have on the surge pricing (typically
+0.25 to 0.35).</li>
+<li>\(N(c)\): The set of neighbor cells to a cell \(c\).</li>
+</ul>
+</div>
+</li>
+<li><a id="org0831fda"></a>4. Temporal Decay and Jitter Prevention<br />
+<div class="outline-text-5" id="text-5-4-1-4">
+<p>
+To prevent sudden jumps in the surge pricing multiplier over time, the values should be "smoothed
+out" over time. This can be done using a technique known as <a href="https://en.wikipedia.org/wiki/Exponential_smoothing">Exponential Moving Average</a> (EMA). In a
+nutshell, for each new 30 second time interval, the new value for the surge price multiplier is
+computed by including the previous value multiplied by a fraction. Because each value multiplies its
+previous value by a smoothing factor (\(\lambda\)), the contribution of past values decays exponentially
+depending on how far back it is in time.
+</p>
+
+<p>
+\[ S_{final}(c,t) = max \left( S_{min}, \lambda \cdot S_{final}(c, t - \Delta t) + (1 - \lambda) \cdot S_{spatial}(c,t) \right) \]
+</p>
+
+<ul class="org-ul">
+<li>\(\lambda\): A high smoothing factor (e.g. 0.8) leads to slow adjustment to increased demand/supply
+ratios while a low value (e.g. 0.2) leads to rapid adjustment to new values.</li>
+</ul>
+</div>
+</li>
+</ol>
+</div>
+<div id="outline-container-sub-component-driverstatusaggregator" class="outline-4">
+<h4 id="sub-component-driverstatusaggregator"><span class="section-number-4">5.4.2.</span> Sub-Component: DriverStatusAggregator</h4>
+<div class="outline-text-4" id="text-sub-component-driverstatusaggregator">
+<p>
+This sub-component, whether it is developed as a library or a package in the SurgePriceService, is
+responsible for consuming <code>DriverStatusUpdateEvent</code> messages from Kafka topic
+<code>DriverStatusUpdateEvents</code>, and organizing them in memory by geo-spacial cell. The cumulative value
+will be sampled every 30 seconds by the <code>SurgePriceComputer</code> sub-component, described later.
+</p>
+
+<p>
+The core algorithm that this component will use is described below:
+</p>
+
+
+<div id="org6cc53c8" class="figure">
+<p><img src="design/driverstatusaggregator-activity.png" alt="driverstatusaggregator-activity.png" />
+</p>
+</div>
+
+<p>
+Keeping persistent computation of calculated values can be accomplished using <a href="https://kafka.apache.org/43/streams/">Kafka Streams</a>. The
+best combination of tools to accomplish this algorithm would be:
+</p>
+
+<ul class="org-ul">
+<li>Incoming Kafka messages will be <code>DriverStatusUpdateEvent</code> messages on topic
+<code>DriverStatusUpdateEvents</code>.</li>
+<li>The messages will be interpretted as a <a href="https://kafka.apache.org/43/streams/core-concepts/#duality-of-streams-and-tables">KTable</a>, grouped using a key of the H3 cell of the event
+location.</li>
+<li>The stream will be grouped by H3 cell using the <a href="https://kafka.apache.org/43/javadoc/org/apache/kafka/streams/kstream/KStream.html#groupBy(org.apache.kafka.streams.kstream.KeyValueMapper)">groupBy</a> method.</li>
+<li>The count of drivers per H3 cell will be decremented (when a driver leaves a cell) and incremented
+(when a driver enters a cell) using the <a href="https://kafka.apache.org/43/streams/developer-guide/dsl-api/#aggregating">aggregate</a> method.</li>
+</ul>
+
+<p>
+This allows for an up-to-date count of how many available drivers there are per H3 cell, which can be queried.
+</p>
+</div>
+</div>
+<div id="outline-container-sub-component-customerrequestaggregator" class="outline-4">
+<h4 id="sub-component-customerrequestaggregator"><span class="section-number-4">5.4.3.</span> Sub-Component: CustomerRequestAggregator</h4>
+<div class="outline-text-4" id="text-sub-component-customerrequestaggregator">
+<p>
+The purpose of this component is similar to that of the DriverStatusAggregator, in the sense that
+the goal is to have an active count of the number of requests per H3 cell. The primary difference is
+that customer requests are ephemeral, they do not need to kept track of as they move from cell to
+cell, like the drivers do. Thus, the system needs to only aggregate customer requests every 30 seconds
+into a count per H3 cell.
+</p>
+
+<p>
+One crude algorithm could be as follows:
+</p>
+
+<div id="orgc8737f7" class="figure">
+<p><img src="design/customerstatusaggregator-activity.png" alt="customerstatusaggregator-activity.png" />
+</p>
+</div>
+
+<p>
+Keeping persistent computation of the number of customer requests per H3 cell can be accomplished
+using Kafka Streams as well, albeit with slightly different configurations.
+</p>
+
+<ul class="org-ul">
+<li>Incoming Kafka messages will be the <code>CustomerRequestEvent</code> messages on topic
+<code>CustomerRequestEvents</code>.</li>
+<li>The messages will be interpretted as a <code>KTable</code>, grouped using a key of the H3 cell of the event
+location.</li>
+<li>The stream will use <code>Tumbling Time Windows</code>, with size of 30 seconds. That is to say, Customer
+Requests will be counted up per H3 cell in separate independent 30-second batches.</li>
+</ul>
+</div>
+</div>
+<div id="outline-container-sub-component-surgepricecomputer" class="outline-4">
+<h4 id="sub-component-surgepricecomputer"><span class="section-number-4">5.4.4.</span> Sub-Component: SurgePriceComputer</h4>
+<div class="outline-text-4" id="text-sub-component-surgepricecomputer">
+<p>
+This component will consist of two main parts:
+</p>
+<ul class="org-ul">
+<li>A background service that computes surge price multipliers every 30 seconds.</li>
+<li>An HTTP controller that serves Surge-Price Multipliers from this pre-computed and cached data.</li>
+</ul>
+
+<p>
+Algorithm: Periodic Computing of Surge Price Multipliers
+</p>
+
+
+<div id="orgfc4885b" class="figure">
+<p><img src="design/surgepricecomputer-activity.png" alt="surgepricecomputer-activity.png" />
+</p>
+</div>
+</div>
+<ol class="org-ol">
+<li><a id="org18ec5d2"></a>Interface: SurgePricingForArea<br />
+<div class="outline-text-5" id="text-5-4-4-1">
+<p>
+Interface definition:
+</p>
+<ul class="org-ul">
+<li><b>Description</b>: Given a set of H3 cells defining an area, returns the current Surge-Price
+Multipliers for each level 8 cell in the area.</li>
+<li><b>Protocol</b>: HTTPS</li>
+<li><b>Method</b>: POST</li>
+<li><b>Path</b>: /api/surge-price-multipliers</li>
+<li><b>Request Headers</b>
+<dl class="org-dl">
+<dt>Content-Type</dt><dd>application/json</dd>
+</dl></li>
+<li><b>Request Query Parameters</b>:
+<ul class="org-ul">
+<li>None</li>
+</ul></li>
+<li><p>
+<b>Request Body</b>:
+</p>
+<div class="org-src-container">
+<pre class="src src-js">{
+  // @type {?Array&lt;string&gt;} A list of H3 cell IDs for which surge pricing is desired.
+  // @see https://h3geo.org/
+  "h3_cells": ["85283473fffffff", "8528347bfffffff", "85283477fffffff"]
+}
+</pre>
+</div></li>
+<li><b>Responses</b>
+<ul class="org-ul">
+<li><b>Response Status 200 Success</b>
+<ul class="org-ul">
+<li><b>Response Headers</b>
+<dl class="org-dl">
+<dt>Content-Type</dt><dd>application/json</dd>
+<dt>Content-Length</dt><dd>The number of bytes in the response body.</dd>
+</dl></li>
+<li><p>
+<b>Response Body</b>
+</p>
+<div class="org-src-container">
+<pre class="src src-js">{
+  // @type {Object&lt;string, number&gt;} A list of H3 cell IDs for which surge pricing
+  //     is desired.
+  // @see https://h3geo.org/
+  "surge_pricing_by_h3_cell": {
+    "85283473fffffff": 1.2,
+    "8528347bfffffff": 1.0,
+    "85283477fffffff": 1.5
+  }
+}
+</pre>
+</div></li>
+</ul></li>
+<li><b>Response Status 400 Bad Request</b>
+<ul class="org-ul">
+<li><b>Description</b>: This response is encountered, for example, when a request is missing a body.</li>
+</ul></li>
+</ul></li>
+</ul>
+</div>
+</li>
+</ol>
+</div>
+</div>
+</div>
+</div>
+<div id="postamble" class="status">
+<p class="date">Date: 2026-11-19 Thu 00:00</p>
+<p class="author">Author: Vijay Paul Nayar</p>
+<p class="date">Created: 2026-11-19 Thu 17:08</p>
+<p class="validation"><a href="https://validator.w3.org/check?uri=referer">Validate</a></p>
+</div>
+</body>
+</html>
