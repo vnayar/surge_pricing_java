@@ -1,0 +1,43 @@
+# This is the default file name loaded by `docker compose up`.
+#
+# The purpose of this file is to start local dependencies needed by the Surge Pricing Service
+# so that it can be tested for local development.
+#
+# The following dependencies are started:
+# - Apache Kafka
+
+# See: https://docs.docker.com/reference/compose-file/
+version: '2'
+
+# See: https://docs.docker.com/reference/compose-file/services/
+services:
+
+  # See: https://hub.docker.com/r/apache/kafka
+  kafka:
+    image: docker.io/apache/kafka:4.0.1
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      # The name of the Kafka cluster in KRaft.
+      CLUSTER_ID: "kafka"
+      # node.id is unique per broker and is needed by KRaft
+      KAFKA_NODE_ID: "0"
+      # Adding 'controller' enables KRaft and avoids the need for Zookeeper.
+      KAFKA_PROCESS_ROLES: "controller,broker"
+      # Define named listeners with hosts/ports to bind to.
+      KAFKA_LISTENERS: "BROKER://:9092,CONTROLLER://:9093"
+      # Specify the protocol used for each listener.
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,BROKER:PLAINTEXT"
+      # Indicates which listener the controller will use, which is used for admin tasks.
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      # Make sure to explicitly use IPv4, as some systems use IPv6 for localhost.
+      KAFKA_ADVERTISED_LISTENERS: "BROKER://127.0.0.1:9092"
+      # The internal network is the same as the "external" network in this environment.
+      KAFKA_INTER_BROKER_LISTENER_NAME: "BROKER"
+      # Let our single broker be the sole decider of leadership elections.
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "0@localhost:9093"
+      # By default, the changelog topic has a replication factor of 3, but we have only 1 broker.
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      # Increase the amount of RAM than Kafka can use.
+      KAFKA_HEAP_OPTS: "-Xmx8192m -Xms8192m"
