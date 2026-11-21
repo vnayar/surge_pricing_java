@@ -18,6 +18,7 @@ public class DriverStatusUpdateEventConsumer {
 
   @KafkaHandler
   public void consumeDriverStatusUpdateEvent(DriverStatusUpdateEvent event) {
+    log.trace("Received CustomerRequestEvent!");
     driverStatusAggregator.updateDriver(event);
   }
 }
