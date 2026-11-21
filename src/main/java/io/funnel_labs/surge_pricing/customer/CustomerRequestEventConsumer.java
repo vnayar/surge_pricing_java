@@ -18,6 +18,7 @@ public class CustomerRequestEventConsumer {
 
   @KafkaHandler
   public void consumeCustomerRequestEvent(CustomerRequestEvent event) {
+    log.trace("Received CustomerRequestEvent!");
     customerRequestAggregator.updateRequests(event);
   }
 }

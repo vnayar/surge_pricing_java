@@ -16,10 +16,11 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class FakeCustomerRequestEventProducer {
-  private static final double MIN_LONGITUDE = 13.276805;
   private static final double MIN_LATITUDE = 52.448121;
-  private static final double MAX_LONGITUDE = 13.499795;
   private static final double MAX_LATITUDE = 52.553088;
+
+  private static final double MIN_LONGITUDE = 13.276805;
+  private static final double MAX_LONGITUDE = 13.499795;
 
   private final KafkaTemplate<Long, CustomerRequestEvent> kafkaTemplate;
 

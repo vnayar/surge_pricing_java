@@ -151,11 +151,11 @@ public class SurgePriceComputerTests {
     // Neighbor cells should absorb some of the value of the cell with supply and demand.
     // Raw = 0 / (0 + 0.1) = 0.0
     // Log = 1.0 + 0.5 * log(1.0 + max(0, Raw - 2.0)) = 1.0
-    // Spatial = (1.0 - 0.25) * Log + 0.25 * (1.0 + 1.0 + 1.6625)/3 = 1.0552
+    // Spatial = (1.0 - 0.25) * 1.0 + 0.25 * (1.0 + 1.0 + 1.6625 + 1.0 + 1.0 + 1.0)/6 = 1.0552
     assertThat(surgePriceMultipliersByH3Cell)
         .hasEntrySatisfying(
             h3.stringToH3("881f1d48e7fffff"),
-            multiplier -> assertThat(multiplier).isCloseTo(1.0552, within(0.001)));
+            multiplier -> assertThat(multiplier).isCloseTo(1.0276, within(0.001)));
   }
 
   @Test

@@ -2,8 +2,11 @@ package io.funnel_labs.surge_pricing.surge;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -79,7 +82,7 @@ public class SurgePriceComputer {
 
       rawSurgePriceMultiplierByH3Cell.put(h3Cell, rawSurgePriceMultiplier);
 
-      log.info("h3Cell[{}]={ \"demand\": {}, \"supply\": {}, \"demandToSupplyRatio\": {}, "
+      log.trace("h3Cell[{}]={ \"demand\": {}, \"supply\": {}, \"demandToSupplyRatio\": {}, "
           + "\"rawSurgePriceMultiplier\": {} }",
           h3Cell, demand, supply, demandToSupplyRatio, rawSurgePriceMultiplier);
     }
@@ -99,25 +102,23 @@ public class SurgePriceComputer {
           * (1.0 - surgePriceConfig.getWeightNeighbor());
       // Look at the target cell's neighbors.
       double neighborSurgePriceMultiplierSum = 0.0;
-      double numNeighbors = 0.0;
       for (Long diskCell : h3.gridDisk(h3Cell, 1)) {
         // The neighbors collectively contribute according to the spatial weight.
-        if (!diskCell.equals(h3Cell) && h3CellSet.contains(diskCell)) {
-          neighborSurgePriceMultiplierSum += rawSurgePriceMultiplierByH3Cell.get(diskCell);
-          numNeighbors += 1.0;
+        if (!diskCell.equals(h3Cell)) {
+          neighborSurgePriceMultiplierSum +=
+              rawSurgePriceMultiplierByH3Cell.getOrDefault(diskCell, 1.0);
         }
       }
-      spatialSurgePriceMultiplierByH3Cell.put(
-          h3Cell,
-          selfSurgePriceMultiplier + surgePriceConfig.getWeightNeighbor()
-              * neighborSurgePriceMultiplierSum / numNeighbors);
+      double neighborsSurgePriceMultiplier =
+          surgePriceConfig.getWeightNeighbor() * neighborSurgePriceMultiplierSum / 6.0;
+      spatialSurgePriceMultiplierByH3Cell
+          .put(h3Cell, selfSurgePriceMultiplier + neighborsSurgePriceMultiplier);
 
-      log.info("h3CellS[{}]={ \"rawSurgePriceMultiplier\": {}, "
+      log.trace("h3CellS[{}]={ \"rawSurgePriceMultiplier\": {}, "
           + "\"neighborSurgePriceMultiplierSum\": {},"
-          + "\"numNeighbors\": {},"
           + "\"spatialSurgePriceMultiplierByCell\": {} }",
           h3Cell, rawSurgePriceMultiplier, neighborSurgePriceMultiplierSum,
-          numNeighbors, spatialSurgePriceMultiplierByH3Cell.get(h3Cell));
+          spatialSurgePriceMultiplierByH3Cell.get(h3Cell));
     }
     return spatialSurgePriceMultiplierByH3Cell;
   }
@@ -138,9 +139,25 @@ public class SurgePriceComputer {
                 return currMultiplier;
               }
             });
-        log.info("finalSugePriceMultiplier[{}]={}", h3Cell, currSurgePriceMultiplierByH3Cell.get(h3Cell));
+        log.trace("finalSugePriceMultiplier[{}]={}", h3Cell, currSurgePriceMultiplierByH3Cell.get(h3Cell));
       }
     }
     return currSurgePriceMultiplierByH3Cell;
+  }
+
+  public List<Long> convertCellsToResolution(List<Long> cells, int targetResolution) {
+    // Convert the input cells into our target resolution.
+    return cells.stream()
+        .flatMap((Long cell) -> {
+              int resolution = h3.getResolution(cell);
+              if (resolution > targetResolution) {
+                return Stream.of(h3.cellToParent(cell, targetResolution));
+              } else if (resolution < targetResolution) {
+                return h3.cellToChildren(cell, targetResolution).stream();
+              } else {
+                return Stream.of(cell);
+              }
+            })
+        .collect(Collectors.toList());
   }
 }
